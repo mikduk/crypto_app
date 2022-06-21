@@ -13,11 +13,12 @@ void main() {
   runApp(const MyApp());
 }
 
-class MyHttpOverrides extends HttpOverrides{
+class MyHttpOverrides extends HttpOverrides {
   @override
-  HttpClient createHttpClient(SecurityContext? context){
+  HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port)=> true;
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }
 
@@ -32,7 +33,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Projekt Kryptografia 2022'),
     );
   }
 }
@@ -49,7 +50,9 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   bool wait = false;
   Position? _currentPosition;
-  String _currentAddress = "";
+  String _currentAddress1 = "";
+  String _currentAddress2 = "";
+  String _currentAddress3 = "";
   String myId = "";
 
   @override
@@ -58,14 +61,15 @@ class _MyHomePageState extends State<MyHomePage> {
     checkLocation();
   }
 
-  void _makeRequest() {
-    setState(() {
-      wait = true;
-    });
-    postResponse();
+  Future<void> _closeApp() async {
+    if (myId != "") {
+      await leaveResponse().then((value) => exit(0));
+    } else {
+      exit(0);
+    }
   }
 
-  Future<dynamic> postResponse() async {
+  Future<dynamic> leaveResponse() async {
     bool error = false;
     ByteData data = await rootBundle.load('assets/certificates/client1.pfx');
     SecurityContext context = SecurityContext.defaultContext;
@@ -73,13 +77,13 @@ class _MyHomePageState extends State<MyHomePage> {
     context.usePrivateKeyBytes(data.buffer.asUint8List());
 
     Response response = await post(
-      Uri.parse('https://ec2-52-56-119-91.eu-west-2.compute.amazonaws.com/update'),
+      Uri.parse(
+          'https://ec2-52-56-119-91.eu-west-2.compute.amazonaws.com/leave'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
       },
       body: jsonEncode(<String, dynamic>{
-        // 'my_id': myId,
-        'send_messages': <String, String>{} // tutaj będzie obiekt
+        'my_id': myId,
       }),
     ).catchError((err) {
       print(err);
@@ -97,6 +101,52 @@ class _MyHomePageState extends State<MyHomePage> {
     return response;
   }
 
+  void _makeRequest() {
+    setState(() {
+      wait = true;
+    });
+    postResponse();
+  }
+
+  Future<dynamic> postResponse() async {
+    bool error = false;
+    ByteData data = await rootBundle.load('assets/certificates/client1.pfx');
+    SecurityContext context = SecurityContext.defaultContext;
+    context.useCertificateChainBytes(data.buffer.asUint8List());
+    context.usePrivateKeyBytes(data.buffer.asUint8List());
+
+    Response response = await post(
+      Uri.parse(
+          'https://ec2-52-56-119-91.eu-west-2.compute.amazonaws.com/update'),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        // 'my_id': myId,
+        'send_messages': <String, String>{} // tutaj będzie obiekt
+      }),
+    ).catchError((err) {
+      print(err);
+      error = true;
+    });
+
+    if (!error) {
+      print(response.statusCode);
+      print(response.body);
+      if (response.statusCode == 200) {
+        dynamic responseObj = jsonDecode(response.body);
+        setState(() {
+          myId = responseObj["your_id"];
+        });
+      }
+    }
+    setState(() {
+      wait = false;
+    });
+
+    return response;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,32 +154,58 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Padding(
-                padding: EdgeInsets.only(bottom: 10.0),
-                child: Text("Moja lokalizacja:")),
-            Padding(
-                padding: const EdgeInsets.only(bottom: 10.0),
-                child: Text(_currentAddress,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 18.0))),
-            Padding(
-                padding: const EdgeInsets.only(bottom: 10.0),
-                child: Text(
-                    "${_currentPosition?.latitude}, ${_currentPosition?.longitude}")),
-            Padding(
-                padding: EdgeInsets.only(top: 20.0),
-                child: Text(wait
-                    ? 'waiting...'
-                    : 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu')),
-          ],
-        ),
+        child: Stack(children: [
+          SizedBox(
+              width: double.infinity,
+              child:
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Padding(
+                    padding: const EdgeInsets.only(top: 10.0, right: 10.0),
+                    child: FloatingActionButton(
+                      backgroundColor: Colors.red.withOpacity(0.6),
+                      onPressed: _closeApp,
+                      tooltip: 'CLOSE APP',
+                      child: const Icon(Icons.close),
+                    )),
+              ])),
+          SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Padding(
+                      padding: EdgeInsets.only(bottom: 10.0),
+                      child: Text("Moja lokalizacja:")),
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 5.0),
+                      child: Text(_currentAddress1,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 18.0))),
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: Text("ul. $_currentAddress2",
+                          style: const TextStyle(fontSize: 24.0))),
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: Text(_currentAddress3,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 18.0))),
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: Text(
+                          "${_currentPosition?.latitude}, ${_currentPosition?.longitude}")),
+                  Padding(
+                      padding: EdgeInsets.only(top: 20.0),
+                      child: Text(wait
+                          ? 'waiting...'
+                          : 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu'))
+                ],
+              ))
+        ]),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _makeRequest,
-        tooltip: 'Increment',
+        tooltip: 'START',
         child: const Icon(Icons.api_rounded),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
@@ -147,7 +223,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }).catchError((e) {
       print(e);
     });
-    Future.delayed(const Duration(seconds: 15), ()=> checkLocation());
+    Future.delayed(const Duration(seconds: 15), () => checkLocation());
   }
 
   _getAddressFromLatLng(Position position) async {
@@ -158,8 +234,9 @@ class _MyHomePageState extends State<MyHomePage> {
       Placemark place = placemarks[0];
 
       setState(() {
-        _currentAddress =
-            "${place.locality}, ${place.postalCode}, ${place.country}";
+        _currentAddress1 = "${place.locality}, ${place.subLocality}";
+        _currentAddress2 = "${place.street}";
+        _currentAddress3 = "${place.postalCode}, ${place.country}";
       });
     } catch (e) {
       print(e);
