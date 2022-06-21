@@ -1,0 +1,153 @@
+```
+p = <stała duża liczba pierwsza> 
+h = <stały generator grupy Quadratic residue Zp>
+
+class ProtocolState:
+  def __init__(my_client_id, other_client_id, my_x):
+    self.other_client_id = other_client_id
+    self.my_client_id = my_client_id
+    self.x = my_x # mój punkt na mapie
+
+    self.a1 = randomFromZp()
+    self.a2 = randomFromZp()
+    self.a3 = randomFromZp()
+
+    self.shared_m = None
+    self.shared_l = None
+    self.bob_P = None
+    self.bob_Q = None
+
+    self.state = 'init'
+  def 
+
+  def alice_send_start():
+    if self.state != 'init':
+      throw 'Invalid state'
+
+    # zakładając że mamy tylko 2 użytkowników, zaczyna ten z większym id (Alice)
+    if self.my_client_id < self.other_client_id:
+      return
+
+    send_update({
+      my_id: self.my_client_id,
+      send_messages: {
+        [self.other_client_id]: {
+          alogirthm_step: 'start',
+          values: [
+            h ** self.a1 mod p,
+            h ** self.a2 mod p
+          ]
+        }
+      }
+    })
+
+    self.state = 'start_sent'
+  end
+
+  # może tylko ten z mniejszym ID otrzymać (Bob)
+  def bob_receive_start(h_a1, h_a2):
+    if self.state != 'init':
+      throw 'Invalid state'
+    
+    if h_a1 or h_a2 == 1:
+      return self.send_terminate()
+
+    m = h_a1 ** self.a1 mod p
+    l = h_a2 ** self.a2 mod p
+    bob_P = l ** self.a3 mod p
+    bob_Q = (h ** self.a3) * (m ** self.x)
+
+    self.shared_m = m
+    self.shared_l = l
+    self.bob_P = bob_P
+    self.bob_Q = bob_Q
+
+    send_update({
+      my_id: self.my_client_id,
+      [self.other_client_id]: {
+        alogirthm_step: 'start_response',
+        values: [
+          h ** self.a1 mod p,
+          h ** self.a2 mod p,
+          bob_P,
+          bob_Q
+        ]
+      }
+    })
+
+    self.state = 'start_response_sent'
+  end
+  
+  # może tylko ten z większym ID otrzymać (Alice)
+  def alice_receive_start_response(h_b1, h_b2, bob_P, bob_Q):
+    if self.state != 'start_sent':
+      throw 'Invalid state'
+
+    if h_b1 or h_b2 == 1:
+      return send_terminate()
+
+    m = h_b1 ** self.a1 mod p
+    l = h_b2 ** self.a2 mod p
+    alice_P = l ** self.a3 mod p
+    alice_Q = (h ** self.a3) * (m ** self.x)
+
+    if alice_P == bob_P or alice_Q == bob_Q:
+      return send_terminate()
+    
+    # zrób magię z dostępnymi liczbami żeby znaleźć wynik
+
+    send_update({
+      my_id: self.my_client_id,
+      [self.other_client_id]: {
+        alogirthm_step: 'part2',
+        values: [
+          h ** self.a1 mod p,
+          h ** self.a2 mod p,
+          bob_P,
+          bob_Q
+        ]
+      }
+    })
+
+    self.sate = 'part2_sent'
+  end
+
+  def bob_receive_part2(alice_P, alice_Q):
+    if self.sate != 'start_response_sent':
+      throw 'Invalid state'
+
+    # zrób magie z aliceP, alice_Q, self.my_P i self.my_Q
+  end
+
+  def receive_terminate():
+    self.state = 'init'
+  end    
+
+  def send_terminate():
+    send_update({
+      my_id: self.my_client_id,
+      [self.other_client_id]: {
+        alogirthm_step: 'terminate'
+      }
+    })
+
+    self.state = 'init'
+    # ewentualnie wyzerować wartości
+end
+
+
+def main():
+  {clients, your_id} = send_update({})
+
+  other_id = clients[0]
+  state = new ProtocolState(your_id, other_id, getLocation())
+  sate.alice_send_start()
+
+  each second do:
+    {inbox} = send_update({my_id: your_id, send_messages: {}})
+
+    if inbox.alogirthm_step == 'start':
+      state.bob_receive_start(...inbox.values)
+    and so on..
+end
+```
