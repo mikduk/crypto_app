@@ -127,10 +127,10 @@ class _MyHomePageState extends State<MyHomePage> {
         _currentPosition = position;
         _getAddressFromLatLng(position);
       });
-      print(_currentPosition?.latitude);
     }).catchError((e) {
       print(e);
     });
+    Future.delayed(const Duration(seconds: 15), ()=> checkLocation());
   }
 
   _getAddressFromLatLng(Position position) async {
