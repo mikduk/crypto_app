@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
@@ -7,7 +9,16 @@ import 'dart:convert';
 import 'package:http/http.dart';
 
 void main() {
+  HttpOverrides.global = MyHttpOverrides();
   runApp(const MyApp());
+}
+
+class MyHttpOverrides extends HttpOverrides{
+  @override
+  HttpClient createHttpClient(SecurityContext? context){
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port)=> true;
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -56,16 +67,22 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<dynamic> postResponse() async {
     bool error = false;
+    ByteData data = await rootBundle.load('assets/certificates/client1.pfx');
+    SecurityContext context = SecurityContext.defaultContext;
+    context.useCertificateChainBytes(data.buffer.asUint8List());
+    context.usePrivateKeyBytes(data.buffer.asUint8List());
+
     Response response = await post(
       Uri.parse('https://ec2-52-56-119-91.eu-west-2.compute.amazonaws.com/update'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
       },
-      body: jsonEncode(<String, String>{
-        'my_id': myId,
-        'send_messages': '{}' // tutaj będzie obiekt
+      body: jsonEncode(<String, dynamic>{
+        // 'my_id': myId,
+        'send_messages': <String, String>{} // tutaj będzie obiekt
       }),
     ).catchError((err) {
+      print(err);
       error = true;
     });
 
