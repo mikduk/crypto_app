@@ -7,7 +7,7 @@ int p = 2;
 int h = 3;
 
 enum ProtocolStateStatus {init, startSent, startResponseSent, part2Sent}
-enum AlgorithmSteps {start, startResponse, part2, terminate}
+enum AlgorithmSteps {start, startResponse, part2, finish, terminate}
 
 class ProtocolState {
   // fields
@@ -27,16 +27,23 @@ class ProtocolState {
 
   num? sharedM;
   num? sharedL;
-  num? bobP;
-  num? bobQ;
+  num? otherPartyP;
+  num? otherPartyQ;
+
+  num? P;
+  num? Q;
+  num? R;
 
   ProtocolStateStatus state = ProtocolStateStatus.init;
 
+  bool? Function(bool?) resultToInterface = (res) => null;
+
   // constructor
-  ProtocolState(String otherClientID, String myClientID, String position) {
+  ProtocolState(String otherClientID, String myClientID, String position, bool? Function(bool?) setMyState) {
     otherClientId = otherClientID;
     myClientId = myClientID;
     x = position;
+    resultToInterface = setMyState;
   }
 
   // functions
@@ -82,8 +89,8 @@ class ProtocolState {
 
     num m = pow(hA1, a1) % p;
     num l = pow(hA2, a2) % p;
-    bobP = pow(l, a3) % p;
-    bobQ = pow(h, a3) * pow(m, x); // x mam jako string na razie
+    P = pow(l, a3) % p;
+    Q = pow(h, a3) * pow(m, x); // x mam jako string na razie
 
     sharedM = m;
     sharedL = l;
@@ -96,8 +103,8 @@ class ProtocolState {
           'values': [
             pow(h, a1) % p,
             pow(h, a2) % p,
-            bobP,
-            bobQ
+            P,
+            Q
           ]
         }
       }
@@ -118,16 +125,19 @@ class ProtocolState {
       return sendTerminate();
     }
 
-    num m = pow(hB1, a1) % p;
-    num l = pow(hB2, a2) % p;
-    aliceP = pow(l, a3) % p;
-    num aliceQ = pow(h, a3) * pow(m, x); // x mam jako string na razie
+    otherPartyP = bobP_;
+    otherPartyQ = bobQ_;
 
-    if (alice_P == bobP || aliceQ == bobQ) {
+    sharedM = pow(hB1, a1) % p;
+    sharedL = pow(hB2, a2) % p;
+
+    P = pow(sharedL!, a3) % p;
+    Q = pow(h, a3) * pow(sharedM!, x); // x mam jako string na razie
+    R = pow(Q! / otherPartyQ!, a2);
+
+    if (otherPartyP == P || otherPartyQ == Q) {
       return sendTerminate();
     }
-
-    /// TODO: zrób magię z dostępnymi liczbami żeby znaleźć wynik
 
     String body = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
@@ -135,10 +145,9 @@ class ProtocolState {
         otherClientId: <String, dynamic>{
           'algorithm_step': AlgorithmSteps.part2.name,
           'values': [
-            pow(h, a1) % p,
-            pow(h, a2) % p,
-            bobP,
-            bobQ
+            P,
+            Q,
+            R
           ]
         }
       }
@@ -149,12 +158,43 @@ class ProtocolState {
     state = ProtocolStateStatus.part2Sent;
   }
 
-  void bobReceivePart2(aliceP_, aliceQ_) {
+  void bobReceivePart2(aliceP_, aliceQ_, aliceR_) {
     if (state != ProtocolStateStatus.startResponseSent) {
       throw Exception("Invalid state");
     }
 
-    /// TODO: zrób magie z aliceP, alice_Q, self.my_P i self.my_Q
+    R = pow(Q! / aliceQ_, a2);
+
+    String body = jsonEncode(<String, dynamic>{
+      'my_id': myClientId,
+      'send_messages': <String, dynamic>{
+        otherClientId: <String, dynamic>{
+          'algorithm_step': AlgorithmSteps.finish.name,
+          'values': [
+            R
+          ]
+        }
+      }
+    });
+
+    // send_update(body);
+
+    // Tutaj wynik, trzeba update na interfejs wtedy puścić
+    bool res = pow(aliceR_, a2) == P! / otherPartyP!;
+    resultToInterface(res);
+    // Dodatkowo zresetować stan protokołu
+  }
+
+  void aliceFinish(bobR_) {
+    if (state != ProtocolStateStatus.part2Sent) {
+      throw Exception("Invalid state");
+    }
+
+    // Tutaj wynik, trzeba update na interfejs wtedy puścić
+    bool res = pow(bobR_, a2) == P! / otherPartyP!;
+    resultToInterface(res);
+    // Dodatkowo zresetować stan protokołu
+
   }
 
   void receiveTerminate() {

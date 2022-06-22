@@ -28,6 +28,8 @@ class _MyHomePageState extends State<MyHomePage> {
   String _currentAddress3 = "";
   String myId = "";
 
+  bool? algorithmResult;
+
   @override
   void initState() {
     super.initState();
