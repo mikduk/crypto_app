@@ -11,7 +11,8 @@ import '../constants/api_constants.dart';
 import 'geo_mapping.dart';
 
 /// p
-final BigInt N = BigInt.parse('825181417503968752428899161001');
+// final BigInt N = BigInt.parse('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA237327FFFFFFFFFFFFFFFF');
+final BigInt N = BigInt.parse('10007');
 final BigInt H = BigInt.from(2);
 
 enum ProtocolStateStatus { init, startSent, startResponseSent, part2Sent }
@@ -55,6 +56,9 @@ class ProtocolState {
     a1 = randomFromZp();
     a2 = randomFromZp();
     a3 = randomFromZp();
+    print('a1 = $a1');
+    print('a2 = $a2');
+    print('a3 = $a3');
     requestBody = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
       'send_messages': <String, String>{} // tutaj będzie obiekt
@@ -190,7 +194,7 @@ class ProtocolState {
       BigInt m = _hA1.modPow(a1, N);
       BigInt l = _hA2.modPow(a2, N);
       P = l.modPow(a3, N);
-      Q = H.modPow(a3, N) * m.modPow(x, N);
+      Q = ( H.modPow(a3, N) * m.modPow(x, N) ) % N;
 
       sharedM = m;
       sharedL = l;
@@ -204,6 +208,9 @@ class ProtocolState {
           }
         }
       });
+
+      print('\x1B[33mbobReceiveStart\x1B[0m');
+      print("[$hA1, $hA2] --> [${H.modPow(a1, N)}, ${H.modPow(a2, N)}, $P, $Q]");
 
       sendUpdate(body);
       state = ProtocolStateStatus.startResponseSent;
@@ -233,8 +240,9 @@ class ProtocolState {
     sharedL = hB2_.modPow(a2, N);
 
     P = sharedL.modPow(a3, N);
-    Q = H.modPow(a3, N) * sharedM.modPow(x, N);
-    R = BigInt.from(Q / otherPartyQ).modPow(a2, N);
+    Q = (H.modPow(a3, N) * sharedM.modPow(x, N)) % N;
+
+    R = (Q * otherPartyQ.modInverse(N).modPow(a2, N)) % N;
 
     if (otherPartyP == P || otherPartyQ == Q) {
       return sendTerminate();
@@ -266,7 +274,7 @@ class ProtocolState {
     BigInt _aliceQ_ = BigInt.parse(aliceQ_);
     BigInt _aliceR_ = BigInt.parse(aliceR_);
 
-    R = BigInt.from(_aliceQ_ / Q).modPow(a2, N);
+    R = (_aliceQ_ * Q.modInverse(N).modPow(a2, N)) % N;
     otherPartyP = _aliceP_;
     otherPartyQ = _aliceQ_;
 
@@ -282,11 +290,14 @@ class ProtocolState {
 
     sendUpdate(body);
 
+    print('\x1B[33BobReceivePart2\x1B[0m');
+    print("[$aliceP_, $aliceQ_, $aliceR_] --> [${R}}]");
+
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = _aliceR_.modPow(a2, N) == BigInt.from(P / otherPartyP);
+    bool res = _aliceR_.modPow(a2, N) == (P * otherPartyP.modInverse(N)) % N;
     print('\x1B[33mres:$res\x1B[0m');
     print(_aliceR_.modPow(a2, N));
-    print(BigInt.from(P / otherPartyP));
+    print((P * otherPartyP.modInverse(N)) % N);
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -300,13 +311,13 @@ class ProtocolState {
     BigInt _bobR_ = BigInt.parse(bobR_);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = _bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP);
+    bool res = _bobR_.modPow(a2, N) == (P * otherPartyP.modInverse(N)) % N;
     print('\x1B[33maliceFinish\x1B[0m');
     print("[] --> [$bobR_]");
     print("WYNIK");
-    print(_bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP));
+    print(res);
     print(_bobR_.modPow(a2, N));
-    print(BigInt.from(P / otherPartyP));
+    print((P * otherPartyP.modInverse(N)) % N);
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -335,6 +346,7 @@ class ProtocolState {
   /// TODO: do
   BigInt randomFromZp() {
     int maxInt = 9223372036854775807;
+    maxInt = min(N.toInt(), maxInt);
 
     double res = Random().nextDouble() * maxInt + 1;
     BigInt res_ = BigInt.from(res.floor());
