@@ -1,0 +1,115 @@
+Ogółem 
+ num? bobP;
+ num? bobQ;
+
+  Zamienić na:
+  num? otherPartyP;
+  num? otherPartyQ;
+
+  Dodatkowo dodać:
+  num? P;
+  num? Q;
+  num? R;
+
+  Zmienić enum:
+  enum AlgorithmSteps {start, startResponse, part2, terminate}
+  na:
+  enum AlgorithmSteps {start, startResponse, part2, finish, terminate}
+
+
+I wtedy w bobReceiveStart ustawić P i Q zamiast bobQ bobP
+
+ 
+ 
+ void aliceReceiveStartResponse(hB1, hB2, bobP_, bobQ_) {
+    if (state != ProtocolStateStatus.startSent) {
+      throw Exception("Invalid state");
+    }
+
+    if (hB1 == 1 || hB2 == 1) {
+      return sendTerminate();
+    }
+
+    // Nowe
+    otherPartyP = bobP_;
+    otherPartyQ = bobQ_;
+
+    // Tutaj shared
+    sharedM = pow(hB1, a1) % p;
+    sharedL = pow(hB2, a2) % p;
+
+    P = pow(l, a3) % p;
+    Q = pow(h, a3) * pow(m, x); // x mam jako string na razie
+
+    // Nowe
+    R = pow(Q / otherPartyQ, a2);
+
+    if (alice_P == bobP || aliceQ == bobQ) {
+      return sendTerminate();
+    }
+
+    /// Tutaj 
+    String body = jsonEncode(<String, dynamic>{
+      'my_id': myClientId,
+      'send_messages': <String, dynamic>{
+        otherClientId: <String, dynamic>{
+          'algorithm_step': AlgorithmSteps.part2.name,
+          'values': [
+            P,
+            Q,
+            R
+          ]
+        }
+      }
+    });
+
+    // send_update(body);
+
+    state = ProtocolStateStatus.part2Sent;
+  }
+
+
+  void bobReceivePart2(aliceP_, aliceQ_, aliceR_) {
+    if (state != ProtocolStateStatus.startResponseSent) {
+      throw Exception("Invalid state");
+    }
+
+
+    // Nowe
+
+    R = pow(Q / aliceQ_, a2);
+
+    String body = jsonEncode(<String, dynamic>{
+      'my_id': myClientId,
+      'send_messages': <String, dynamic>{
+        otherClientId: <String, dynamic>{
+          'algorithm_step': AlgorithmSteps.finish.name,
+          'values': [
+            R
+          ]
+        }
+      }
+    });
+
+    // send_update(body);
+    
+    // Tutaj wynik, trzeba update na interfejs wtedy puścić
+    pow(aliceR_, a2) == P / otherPartyP
+    // Dodatkowo zresetować stan protokołu
+
+  }
+
+  void aliceFinish(bobR_) {
+    if (state != ProtocolStateStatus.part2Sent) {
+      throw Exception("Invalid state");
+    }
+
+
+    // Nowe
+
+    // Tutaj wynik, trzeba update na interfejs wtedy puścić
+    pow(bobR_, a2) == P / otherPartyP
+
+    // Dodatkowo zresetować stan protokołu
+
+  }
