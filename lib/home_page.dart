@@ -10,10 +10,12 @@ import 'package:http/http.dart';
 
 import 'api/api_leave.dart';
 import 'constants/api_constants.dart';
+import 'logic/algorithm.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({Key? key, required this.title}) : super(key: key);
 
+  final int interval = 5;
   final String title;
 
   @override
@@ -30,6 +32,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   bool? algorithmResult;
 
+  ProtocolState? protocolState;
+
   @override
   void initState() {
     super.initState();
@@ -44,14 +48,52 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _makeRequest() {
+  Future<void> _makeRequest() async {
     setState(() {
       wait = true;
+      algorithmResult = null;
     });
-    postResponse();
+    try {
+      Response response = await postRequest();
+      String responseJson = response.body;
+      dynamic responseObject = jsonDecode(responseJson);
+      List<dynamic> clients = (responseObject["clients"]);
+      String client = clients[0];
+
+      /// Jeszcze nie pobraliśmy lokalizacji.
+      if (_currentPosition == null) {
+        Future.delayed(Duration(seconds: widget.interval), _makeRequest);
+        setState(() {
+          algorithmResult = false;
+        });
+        return;
+      } else {
+        ProtocolState ps =
+            ProtocolState(client, myId, _currentPosition!, (res) {
+          setState(() {
+            algorithmResult = res;
+          });
+        });
+        setState(() {
+          protocolState = ps;
+        });
+        protocolState!.startAlgorithm();
+        return;
+      }
+    } catch (e) {
+      String err = e.toString();
+      print('\x1B[31m$err\x1B[0m');
+      Future.delayed(Duration(seconds: widget.interval), _makeRequest);
+      setState(() {
+        algorithmResult = false;
+      });
+      return;
+    }
+
+    //
   }
 
-  Future<dynamic> postResponse() async {
+  Future<Response> postRequest() async {
     bool error = false;
     ByteData data = await rootBundle.load('assets/certificates/client1.pfx');
     SecurityContext context = SecurityContext.defaultContext;
@@ -61,9 +103,8 @@ class _MyHomePageState extends State<MyHomePage> {
     /** body calculate */
     String body = "";
     if (myId == "") {
-      body = jsonEncode(<String, dynamic>{
-        'send_messages': <String, String>{}
-      });
+      body = jsonEncode(
+          <String, dynamic>{'send_messages': const <String, String>{}});
     } else {
       body = jsonEncode(<String, dynamic>{
         'my_id': myId,
@@ -108,7 +149,7 @@ class _MyHomePageState extends State<MyHomePage> {
           SizedBox(
               width: double.infinity,
               child:
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Padding(
                     padding: const EdgeInsets.only(top: 10.0, right: 10.0),
                     child: FloatingActionButton(
@@ -148,7 +189,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       padding: EdgeInsets.only(top: 20.0),
                       child: Text(wait
                           ? 'waiting...'
-                          : 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu'))
+                          : (algorithmResult == null
+                              ? 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu'
+                              : (algorithmResult == true ? 'jest' : (protocolState == null ? 'brak (nikogo nie ma)' : 'brak')))))
                 ],
               ))
         ]),
@@ -163,8 +206,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void checkLocation() {
     Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
-        forceAndroidLocationManager: true)
+            desiredAccuracy: LocationAccuracy.best,
+            forceAndroidLocationManager: true)
         .then((Position position) {
       setState(() {
         _currentPosition = position;
@@ -179,7 +222,7 @@ class _MyHomePageState extends State<MyHomePage> {
   _getAddressFromLatLng(Position position) async {
     try {
       List<Placemark> placemarks =
-      await placemarkFromCoordinates(position.latitude, position.longitude);
+          await placemarkFromCoordinates(position.latitude, position.longitude);
 
       Placemark place = placemarks[0];
 

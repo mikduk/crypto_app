@@ -1,10 +1,18 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart';
+
+import '../constants/api_constants.dart';
+import 'geo_mapping.dart';
 
 /// p
-int p = 2;
-/// h
-int h = 3;
+final BigInt N = BigInt.parse('825181417503968752428899161001');
+final BigInt H = BigInt.from(2);
 
 enum ProtocolStateStatus {init, startSent, startResponseSent, part2Sent}
 enum AlgorithmSteps {start, startResponse, part2, finish, terminate}
@@ -13,84 +21,130 @@ class ProtocolState {
   // fields
   String otherClientId = "";
   String myClientId = "";
-  String? x;
+  late int x;
 
-  int a1 = 1;
+  /// randomFromZp
+  late final BigInt a1;
+  late final BigInt a2;
+  late final BigInt a3;
 
-  /// randomFromZp()
-  int a2 = 1;
+  late BigInt sharedM;
+  late BigInt sharedL;
+  late BigInt otherPartyP;
+  late BigInt otherPartyQ;
 
-  /// randomFromZp()
-  int a3 = 1;
-
-  /// randomFromZp()
-
-  num? sharedM;
-  num? sharedL;
-  num? otherPartyP;
-  num? otherPartyQ;
-
-  num? P;
-  num? Q;
-  num? R;
+  late BigInt P;
+  late BigInt Q;
+  late BigInt R;
 
   ProtocolStateStatus state = ProtocolStateStatus.init;
 
-  bool? Function(bool?) resultToInterface = (res) => null;
+  void Function(bool?) resultToInterface = (bool? res){};
 
   // constructor
-  ProtocolState(String otherClientID, String myClientID, String position, bool? Function(bool?) setMyState) {
+  ProtocolState(String otherClientID, String myClientID, Position position, bool? Function(bool?) setMyState) {
     otherClientId = otherClientID;
     myClientId = myClientID;
-    x = position;
+    x = GeoMapping.map(position);
     resultToInterface = setMyState;
+    a1 = randomFromZp();
+    a2 = randomFromZp();
+    a3 = randomFromZp();
+  }
+
+  void startAlgorithm() async {
+    String body = jsonEncode(<String, dynamic>{
+      'my_id': myClientId,
+      'send_messages': <String, String>{} // tutaj będzie obiekt
+    });
+    aliceSendStart();
+    bobReceiveStart(1, 1);
+    request(body);
+  }
+
+  Future<void> request(String body) async {
+    bool error = false;
+    ByteData data = await rootBundle.load('assets/certificates/client1.pfx');
+    SecurityContext context = SecurityContext.defaultContext;
+    context.useCertificateChainBytes(data.buffer.asUint8List());
+    context.usePrivateKeyBytes(data.buffer.asUint8List());
+
+    Response response = await post(
+      Uri.parse(ApiConstants.urlUpdate),
+      headers: ApiConstants.headers,
+      body: body,
+    ).catchError((err) {
+      print(err);
+      error = true;
+    });
+
+    if (!error) {
+      print(response.statusCode);
+      print(response.body);
+      if (response.statusCode == 200) {
+        dynamic responseObj = jsonDecode(response.body);
+        print("tech-print");
+        print(responseObj["your_id"]);
+      }
+    }
   }
 
   // functions
   void aliceSendStart() {
-    if (state != ProtocolStateStatus.init) {
-      throw Exception("Invalid state");
-    }
-
-    /// zakładając że mamy tylko 2 użytkowników, zaczyna ten z większym id (Alice)
-    if (myClientId == "" || otherClientId == "") {
-      return;
-    } else if (myClientId.compareTo(otherClientId) <= 0) {
-      return;
-    }
-
-    String body = jsonEncode(<String, dynamic>{
-      'my_id': myClientId,
-      'send_messages': <String, dynamic>{
-        otherClientId: <String, dynamic>{
-          'algorithm_step': AlgorithmSteps.start.name,
-          'values': [
-            pow(h, a1) % p,
-            pow(h, a2) % p,
-          ]
-        }
+    try {
+      if (state != ProtocolStateStatus.init) {
+        throw Exception("Invalid state");
       }
-    });
 
-    // send_update(body);
+      /// zakładając że mamy tylko 2 użytkowników, zaczyna ten z większym id (Alice)
+      if (myClientId == "" || otherClientId == "") {
+        return;
+      } else if (myClientId.compareTo(otherClientId) <= 0) {
+        print("Hi, I'm Bob!");
+        return;
+      }
 
-    state = ProtocolStateStatus.startSent;
+      print("Hi, I'm Alicia!");
+
+      String body = jsonEncode(<String, dynamic>{
+        'my_id': myClientId,
+        'send_messages': <String, dynamic>{
+          otherClientId: <String, dynamic>{
+            'algorithm_step': AlgorithmSteps.start.name,
+            'values': [
+              H.modPow(a1, N),
+              H.modPow(a2, N),
+            ]
+          }
+        }
+      });
+
+      // send_update(body);
+
+      state = ProtocolStateStatus.startSent;
+    } catch (e) {
+      String err = e.toString();
+      print('\x1B[33m$err\x1B[0m');
+    }
   }
 
   /// może tylko ten z mniejszym ID otrzymać (Bob)
   void bobReceiveStart(hA1, hA2) {
     if (state != ProtocolStateStatus.init) {
+      print("I am further");
       throw Exception("Invalid state");
     }
+
+    print("Bob official introduce");
 
     if (hA1 == 1 || hA2 == 1) {
       return sendTerminate();
     }
 
-    num m = pow(hA1, a1) % p;
-    num l = pow(hA2, a2) % p;
-    P = pow(l, a3) % p;
-    Q = pow(h, a3) * pow(m, x); // x mam jako string na razie
+    BigInt m = hA1.modPow(a1, N);
+    BigInt l = hA2.modPow(a2, N);
+    P = l.modPow(a3, N);
+    Q = H.modPow(a3, BigInt.one) * m.pow(x);
 
     sharedM = m;
     sharedL = l;
@@ -101,8 +155,8 @@ class ProtocolState {
         otherClientId: <String, dynamic>{
           'algorithm_step': AlgorithmSteps.startResponse.name,
           'values': [
-            pow(h, a1) % p,
-            pow(h, a2) % p,
+            H.modPow(a1, N),
+            H.modPow(a2, N),
             P,
             Q
           ]
@@ -128,12 +182,12 @@ class ProtocolState {
     otherPartyP = bobP_;
     otherPartyQ = bobQ_;
 
-    sharedM = pow(hB1, a1) % p;
-    sharedL = pow(hB2, a2) % p;
+    sharedM = BigInt.from(hB1).modPow(a1, N);
+    sharedL = BigInt.from(hB2).modPow(a2, N);
 
-    P = pow(sharedL!, a3) % p;
-    Q = pow(h, a3) * pow(sharedM!, x); // x mam jako string na razie
-    R = pow(Q! / otherPartyQ!, a2);
+    P = sharedL.modPow(a3, N);
+    Q = H.modPow(a3, BigInt.one) * sharedM.pow(x); // x mam jako string na razie
+    R = BigInt.from(Q/otherPartyQ).modPow(a2, BigInt.one);
 
     if (otherPartyP == P || otherPartyQ == Q) {
       return sendTerminate();
@@ -163,7 +217,9 @@ class ProtocolState {
       throw Exception("Invalid state");
     }
 
-    R = pow(Q! / aliceQ_, a2);
+    BigInt _aliceR_ = BigInt.from(aliceR_);
+
+    R = BigInt.from(aliceQ_ / Q).modPow(a2, BigInt.one);
 
     String body = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
@@ -180,7 +236,7 @@ class ProtocolState {
     // send_update(body);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = pow(aliceR_, a2) == P! / otherPartyP!;
+    bool res = _aliceR_.modPow(a2, BigInt.one) == BigInt.from(P/otherPartyP);
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -190,8 +246,11 @@ class ProtocolState {
       throw Exception("Invalid state");
     }
 
+    /// TODO:
+    BigInt _bobR_ = BigInt.from(bobR_);
+
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = pow(bobR_, a2) == P! / otherPartyP!;
+    bool res = _bobR_.modPow(a2, BigInt.one) == BigInt.from(P/otherPartyP);
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
 
@@ -216,5 +275,10 @@ class ProtocolState {
     state = ProtocolStateStatus.init;
 
     /// ewentualnie wyzerować wartości
+  }
+
+  /// TODO: do
+  BigInt randomFromZp() {
+    return BigInt.one;
   }
 }
