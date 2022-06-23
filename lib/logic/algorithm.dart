@@ -199,6 +199,9 @@ class ProtocolState {
       sharedM = m;
       sharedL = l;
 
+      print("sharedM = $sharedM");
+      print("sharedL = $sharedL");
+
       String body = jsonEncode(<String, dynamic>{
         'my_id': myClientId,
         'send_messages': <String, dynamic>{
@@ -239,10 +242,13 @@ class ProtocolState {
     sharedM = hB1_.modPow(a1, N);
     sharedL = hB2_.modPow(a2, N);
 
+    print("sharedM = $sharedM");
+    print("sharedL = $sharedL");
+
     P = sharedL.modPow(a3, N);
     Q = (H.modPow(a3, N) * sharedM.modPow(x, N)) % N;
 
-    R = (Q * otherPartyQ.modInverse(N).modPow(a2, N)) % N;
+    R = (((Q * otherPartyQ.modInverse(N)) % N).modPow(a2, N));
 
     if (otherPartyP == P || otherPartyQ == Q) {
       return sendTerminate();
@@ -274,9 +280,8 @@ class ProtocolState {
     BigInt _aliceQ_ = BigInt.parse(aliceQ_);
     BigInt _aliceR_ = BigInt.parse(aliceR_);
 
-    R = (_aliceQ_ * Q.modInverse(N).modPow(a2, N)) % N;
+    R = (((_aliceQ_ * Q.modInverse(N))%N).modPow(a2, N));
     otherPartyP = _aliceP_;
-    otherPartyQ = _aliceQ_;
 
     String body = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
