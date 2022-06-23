@@ -160,7 +160,8 @@ class ProtocolState {
           }
         }
       });
-
+      print('\x1B[33maliceSendStart\x1B[0m');
+      print("[] --> [${H.modPow(a1, N)}, ${H.modPow(a2, N)}]");
       sendUpdate(body);
       state = ProtocolStateStatus.startSent;
     } catch (e) {
@@ -218,8 +219,6 @@ class ProtocolState {
       throw Exception("Invalid state");
     }
 
-    print('\x1B[39maliceReceiveStartResponse:\x1B[0m');
-
     BigInt hB1_ = BigInt.parse(hB1);
     BigInt hB2_ = BigInt.parse(hB2);
 
@@ -253,6 +252,9 @@ class ProtocolState {
 
     sendUpdate(body);
     state = ProtocolStateStatus.part2Sent;
+
+    print('\x1B[33maliceReceiveStartResponse\x1B[0m');
+    print("[$hB1, $hB2, $bobP_, $bobQ_] --> [${P}, ${Q}, ${R}]");
   }
 
   void bobReceivePart2(aliceP_, aliceQ_, aliceR_) {
@@ -299,6 +301,8 @@ class ProtocolState {
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
     bool res = _bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP);
+    print('\x1B[33maliceFinish\x1B[0m');
+    print("[] --> [$bobR_]");
     print("WYNIK");
     print(_bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP));
     print(_bobR_.modPow(a2, N));
@@ -331,8 +335,6 @@ class ProtocolState {
   /// TODO: do
   BigInt randomFromZp() {
     int maxInt = 9223372036854775807;
-    BigInt maxInt_ = BigInt.from(maxInt);
-    double div = N / maxInt_;
 
     double res = Random().nextDouble() * maxInt + 1;
     BigInt res_ = BigInt.from(res.floor());

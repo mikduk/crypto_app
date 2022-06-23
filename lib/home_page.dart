@@ -124,7 +124,6 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     if (!error) {
-      print(response.statusCode);
       print(response.body);
       if (response.statusCode == 200) {
         dynamic responseObj = jsonDecode(response.body);
