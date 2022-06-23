@@ -62,7 +62,7 @@ class ProtocolState {
   }
 
   void startAlgorithm() async {
-    print('\x1B[34mAlgorithm:\x1B[0m');
+    print('\x1B[34mAlgorithm (\"${state.name}\")\x1B[0m');
     switch (state) {
       case ProtocolStateStatus.init:
         aliceSendStart();
@@ -85,10 +85,13 @@ class ProtocolState {
         }
         break;
       case ProtocolStateStatus.part2Sent:
+          if (requestData.length == 1) {
+            aliceFinish(requestData[0]);
+          }
         break;
     }
     request(requestBody);
-    Future.delayed(const Duration(seconds: 4), startAlgorithm);
+    Future.delayed(const Duration(seconds: 6), startAlgorithm);
   }
 
   Future<void> request(String body) async {
@@ -108,11 +111,9 @@ class ProtocolState {
     });
 
     if (!error) {
-      print(response.statusCode);
-      print(response.body);
       if (response.statusCode == 200) {
         dynamic responseObj = jsonDecode(response.body);
-        print('\x1B[37mTEST-PRINT:\x1B[0m');
+        print('\x1B[37m${responseObj["inbox"]}\x1B[0m');
         bool _hasData = false;
         String? _step;
         List? _value;
@@ -264,6 +265,8 @@ class ProtocolState {
     BigInt _aliceR_ = BigInt.parse(aliceR_);
 
     R = BigInt.from(_aliceQ_ / Q).modPow(a2, N);
+    otherPartyP = _aliceP_;
+    otherPartyQ = _aliceQ_;
 
     String body = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
@@ -278,8 +281,10 @@ class ProtocolState {
     sendUpdate(body);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = _aliceR_.modPow(a2, BigInt.one) == BigInt.from(P / otherPartyP);
-    print('\x1B[33mres:'+res.toString()+'\x1B[0m');
+    bool res = _aliceR_.modPow(a2, N) == BigInt.from(P / otherPartyP);
+    print('\x1B[33mres:$res\x1B[0m');
+    print(_aliceR_.modPow(a2, N));
+    print(BigInt.from(P / otherPartyP));
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -290,10 +295,14 @@ class ProtocolState {
     }
 
     /// TODO:
-    BigInt _bobR_ = BigInt.from(bobR_);
+    BigInt _bobR_ = BigInt.parse(bobR_);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
     bool res = _bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP);
+    print("WYNIK");
+    print(_bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP));
+    print(_bobR_.modPow(a2, N));
+    print(BigInt.from(P / otherPartyP));
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -321,8 +330,7 @@ class ProtocolState {
 
   /// TODO: do
   BigInt randomFromZp() {
-    // int maxInt = 9223372036854775807;
-    int maxInt = 92;
+    int maxInt = 9223372036854775807;
     BigInt maxInt_ = BigInt.from(maxInt);
     double div = N / maxInt_;
 
