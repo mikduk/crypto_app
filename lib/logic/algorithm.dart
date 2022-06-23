@@ -14,14 +14,15 @@ import 'geo_mapping.dart';
 final BigInt N = BigInt.parse('825181417503968752428899161001');
 final BigInt H = BigInt.from(2);
 
-enum ProtocolStateStatus {init, startSent, startResponseSent, part2Sent}
-enum AlgorithmSteps {start, startResponse, part2, finish, terminate}
+enum ProtocolStateStatus { init, startSent, startResponseSent, part2Sent }
+
+enum AlgorithmSteps { start, startResponse, part2, finish, terminate }
 
 class ProtocolState {
   // fields
   String otherClientId = "";
   String myClientId = "";
-  late int x;
+  late BigInt x;
 
   /// randomFromZp
   late final BigInt a1;
@@ -39,27 +40,55 @@ class ProtocolState {
 
   ProtocolStateStatus state = ProtocolStateStatus.init;
 
-  void Function(bool?) resultToInterface = (bool? res){};
+  void Function(bool?) resultToInterface = (bool? res) {};
+
+  late String requestBody;
+  List requestData = [];
 
   // constructor
-  ProtocolState(String otherClientID, String myClientID, Position position, bool? Function(bool?) setMyState) {
+  ProtocolState(String otherClientID, String myClientID, Position position,
+      bool? Function(bool?) setMyState) {
     otherClientId = otherClientID;
     myClientId = myClientID;
-    x = GeoMapping.map(position);
+    x = BigInt.from(GeoMapping.map(position));
     resultToInterface = setMyState;
     a1 = randomFromZp();
     a2 = randomFromZp();
     a3 = randomFromZp();
-  }
-
-  void startAlgorithm() async {
-    String body = jsonEncode(<String, dynamic>{
+    requestBody = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
       'send_messages': <String, String>{} // tutaj będzie obiekt
     });
-    aliceSendStart();
-    bobReceiveStart(1, 1);
-    request(body);
+  }
+
+  void startAlgorithm() async {
+    print('\x1B[34mAlgorithm:\x1B[0m');
+    switch (state) {
+      case ProtocolStateStatus.init:
+        aliceSendStart();
+        if (state == ProtocolStateStatus.init && requestData.length == 2) {
+          bobReceiveStart(requestData[0], requestData[1]);
+        }
+        break;
+      case ProtocolStateStatus.startSent:
+        if (requestData.length == 4) {
+          aliceReceiveStartResponse(requestData[0], requestData[1], requestData[2], requestData[3]);
+        } else {
+          print('\x1B[37mHi, I\'m waiting for Bob...\x1B[0m');
+        }
+        break;
+      case ProtocolStateStatus.startResponseSent:
+        if (requestData.length == 3) {
+          bobReceivePart2(requestData[0], requestData[1], requestData[2]);
+        } else {
+          print('\x1B[37mHi, I\'m waiting for Alice...\x1B[0m');
+        }
+        break;
+      case ProtocolStateStatus.part2Sent:
+        break;
+    }
+    request(requestBody);
+    Future.delayed(const Duration(seconds: 4), startAlgorithm);
   }
 
   Future<void> request(String body) async {
@@ -83,8 +112,20 @@ class ProtocolState {
       print(response.body);
       if (response.statusCode == 200) {
         dynamic responseObj = jsonDecode(response.body);
-        print("tech-print");
-        print(responseObj["your_id"]);
+        print('\x1B[37mTEST-PRINT:\x1B[0m');
+        bool _hasData = false;
+        String? _step;
+        List? _value;
+        try {
+          _step = responseObj["inbox"][otherClientId]["algorithm_step"];
+          _value = (responseObj["inbox"][otherClientId]["values"]);
+          _hasData = true;
+        } catch (e) {
+          print("-");
+        }
+        if (_hasData) {
+          requestData = _value!;
+        }
       }
     }
   }
@@ -100,11 +141,11 @@ class ProtocolState {
       if (myClientId == "" || otherClientId == "") {
         return;
       } else if (myClientId.compareTo(otherClientId) <= 0) {
-        print("Hi, I'm Bob!");
+        print('\x1B[37mHi, I\'m Bob!\x1B[0m');
         return;
       }
 
-      print("Hi, I'm Alicia!");
+      print('\x1B[37mHi, I\'m Alicia!\x1B[0m');
 
       String body = jsonEncode(<String, dynamic>{
         'my_id': myClientId,
@@ -112,15 +153,14 @@ class ProtocolState {
           otherClientId: <String, dynamic>{
             'algorithm_step': AlgorithmSteps.start.name,
             'values': [
-              H.modPow(a1, N),
-              H.modPow(a2, N),
+              H.modPow(a1, N).toString(),
+              H.modPow(a2, N).toString(),
             ]
           }
         }
       });
 
-      // send_update(body);
-
+      sendUpdate(body);
       state = ProtocolStateStatus.startSent;
     } catch (e) {
       String err = e.toString();
@@ -130,43 +170,45 @@ class ProtocolState {
 
   /// może tylko ten z mniejszym ID otrzymać (Bob)
   void bobReceiveStart(hA1, hA2) {
-    if (state != ProtocolStateStatus.init) {
-      print("I am further");
-      throw Exception("Invalid state");
-    }
-
-    print("Bob official introduce");
-
-    if (hA1 == 1 || hA2 == 1) {
-      return sendTerminate();
-    }
-
-    BigInt m = hA1.modPow(a1, N);
-    BigInt l = hA2.modPow(a2, N);
-    P = l.modPow(a3, N);
-    Q = H.modPow(a3, BigInt.one) * m.pow(x);
-
-    sharedM = m;
-    sharedL = l;
-
-    String body = jsonEncode(<String, dynamic>{
-      'my_id': myClientId,
-      'send_messages': <String, dynamic>{
-        otherClientId: <String, dynamic>{
-          'algorithm_step': AlgorithmSteps.startResponse.name,
-          'values': [
-            H.modPow(a1, N),
-            H.modPow(a2, N),
-            P,
-            Q
-          ]
-        }
+    try {
+      if (state != ProtocolStateStatus.init) {
+        print("I am further");
+        throw Exception("Invalid state");
       }
-    });
 
-    // send_update(body);
+      print("Bob official introduce");
 
-    state = ProtocolStateStatus.startResponseSent;
+      BigInt _hA1 = BigInt.parse(hA1);
+      BigInt _hA2 = BigInt.parse(hA2);
+
+      if (_hA1 == BigInt.one || _hA2 == BigInt.one) {
+        return sendTerminate();
+      }
+
+      BigInt m = _hA1.modPow(a1, N);
+      BigInt l = _hA2.modPow(a2, N);
+      P = l.modPow(a3, N);
+      Q = H.modPow(a3, N) * m.modPow(x, N);
+
+      sharedM = m;
+      sharedL = l;
+
+      String body = jsonEncode(<String, dynamic>{
+        'my_id': myClientId,
+        'send_messages': <String, dynamic>{
+          otherClientId: <String, dynamic>{
+            'algorithm_step': AlgorithmSteps.startResponse.name,
+            'values': [H.modPow(a1, N).toString(), H.modPow(a2, N).toString(), P.toString(), Q.toString()]
+          }
+        }
+      });
+
+      sendUpdate(body);
+      state = ProtocolStateStatus.startResponseSent;
+    } catch (e) {
+      String err = e.toString();
+      print('\x1B[31m$err\x1B[0m');
+    }
   }
 
   /// może tylko ten z większym ID otrzymać (Alice)
@@ -175,19 +217,24 @@ class ProtocolState {
       throw Exception("Invalid state");
     }
 
-    if (hB1 == 1 || hB2 == 1) {
+    print('\x1B[39maliceReceiveStartResponse:\x1B[0m');
+
+    BigInt hB1_ = BigInt.parse(hB1);
+    BigInt hB2_ = BigInt.parse(hB2);
+
+    if (hB1_ == BigInt.one || hB2_ == BigInt.one) {
       return sendTerminate();
     }
 
-    otherPartyP = bobP_;
-    otherPartyQ = bobQ_;
+    otherPartyP = BigInt.parse(bobP_);
+    otherPartyQ = BigInt.parse(bobQ_);
 
-    sharedM = BigInt.from(hB1).modPow(a1, N);
-    sharedL = BigInt.from(hB2).modPow(a2, N);
+    sharedM = hB1_.modPow(a1, N);
+    sharedL = hB2_.modPow(a2, N);
 
     P = sharedL.modPow(a3, N);
-    Q = H.modPow(a3, BigInt.one) * sharedM.pow(x); // x mam jako string na razie
-    R = BigInt.from(Q/otherPartyQ).modPow(a2, BigInt.one);
+    Q = H.modPow(a3, N) * sharedM.modPow(x, N);
+    R = BigInt.from(Q / otherPartyQ).modPow(a2, N);
 
     if (otherPartyP == P || otherPartyQ == Q) {
       return sendTerminate();
@@ -198,17 +245,12 @@ class ProtocolState {
       'send_messages': <String, dynamic>{
         otherClientId: <String, dynamic>{
           'algorithm_step': AlgorithmSteps.part2.name,
-          'values': [
-            P,
-            Q,
-            R
-          ]
+          'values': [P.toString(), Q.toString(), R.toString()]
         }
       }
     });
 
-    // send_update(body);
-
+    sendUpdate(body);
     state = ProtocolStateStatus.part2Sent;
   }
 
@@ -217,26 +259,27 @@ class ProtocolState {
       throw Exception("Invalid state");
     }
 
-    BigInt _aliceR_ = BigInt.from(aliceR_);
+    BigInt _aliceP_ = BigInt.parse(aliceP_);
+    BigInt _aliceQ_ = BigInt.parse(aliceQ_);
+    BigInt _aliceR_ = BigInt.parse(aliceR_);
 
-    R = BigInt.from(aliceQ_ / Q).modPow(a2, BigInt.one);
+    R = BigInt.from(_aliceQ_ / Q).modPow(a2, N);
 
     String body = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
       'send_messages': <String, dynamic>{
         otherClientId: <String, dynamic>{
           'algorithm_step': AlgorithmSteps.finish.name,
-          'values': [
-            R
-          ]
+          'values': [R.toString()]
         }
       }
     });
 
-    // send_update(body);
+    sendUpdate(body);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = _aliceR_.modPow(a2, BigInt.one) == BigInt.from(P/otherPartyP);
+    bool res = _aliceR_.modPow(a2, BigInt.one) == BigInt.from(P / otherPartyP);
+    print('\x1B[33mres:'+res.toString()+'\x1B[0m');
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -250,10 +293,9 @@ class ProtocolState {
     BigInt _bobR_ = BigInt.from(bobR_);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = _bobR_.modPow(a2, BigInt.one) == BigInt.from(P/otherPartyP);
+    bool res = _bobR_.modPow(a2, N) == BigInt.from(P / otherPartyP);
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
-
   }
 
   void receiveTerminate() {
@@ -270,7 +312,7 @@ class ProtocolState {
       }
     });
 
-    // send_update(body);
+    sendUpdate(body);
 
     state = ProtocolStateStatus.init;
 
@@ -279,6 +321,19 @@ class ProtocolState {
 
   /// TODO: do
   BigInt randomFromZp() {
-    return BigInt.one;
+    // int maxInt = 9223372036854775807;
+    int maxInt = 92;
+    BigInt maxInt_ = BigInt.from(maxInt);
+    double div = N / maxInt_;
+
+    double res = Random().nextDouble() * maxInt + 1;
+    BigInt res_ = BigInt.from(res.floor());
+
+    return res_;
+  }
+
+  void sendUpdate(String body) {
+    requestBody = body;
+    requestData = [];
   }
 }

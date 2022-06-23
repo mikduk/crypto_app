@@ -33,6 +33,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool? algorithmResult;
 
   ProtocolState? protocolState;
+  bool buttonActive = true;
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       wait = true;
       algorithmResult = null;
+      buttonActive = false;
     });
     try {
       Response response = await postRequest();
@@ -190,14 +192,14 @@ class _MyHomePageState extends State<MyHomePage> {
                       child: Text(wait
                           ? 'waiting...'
                           : (algorithmResult == null
-                              ? 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu'
+                              ? (protocolState == null ? 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu' : 'wait (${protocolState!.state.name})' )
                               : (algorithmResult == true ? 'jest' : (protocolState == null ? 'brak (nikogo nie ma)' : 'brak')))))
                 ],
               ))
         ]),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _makeRequest,
+        onPressed: buttonActive ? _makeRequest : null,
         tooltip: 'START',
         child: const Icon(Icons.api_rounded),
       ), // This trailing comma makes auto-formatting nicer for build methods.
