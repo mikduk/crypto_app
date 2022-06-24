@@ -11,8 +11,7 @@ import '../constants/api_constants.dart';
 import 'geo_mapping.dart';
 
 /// p
-// final BigInt N = BigInt.parse('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA237327FFFFFFFFFFFFFFFF');
-final BigInt N = BigInt.parse('10007');
+final BigInt N = BigInt.parse('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA237327FFFFFFFFFFFFFFFF');
 final BigInt H = BigInt.from(2);
 
 enum ProtocolStateStatus { init, startSent, startResponseSent, part2Sent }
@@ -56,9 +55,6 @@ class ProtocolState {
     a1 = randomFromZp();
     a2 = randomFromZp();
     a3 = randomFromZp();
-    print('a1 = $a1');
-    print('a2 = $a2');
-    print('a3 = $a3');
     requestBody = jsonEncode(<String, dynamic>{
       'my_id': myClientId,
       'send_messages': <String, String>{} // tutaj będzie obiekt
@@ -78,7 +74,7 @@ class ProtocolState {
         if (requestData.length == 4) {
           aliceReceiveStartResponse(requestData[0], requestData[1], requestData[2], requestData[3]);
         } else {
-          print('\x1B[37mHi, I\'m waiting for Bob...\x1B[0m');
+          print('\x1B[37mI\'m waiting for Bob...\x1B[0m');
         }
         break;
       case ProtocolStateStatus.startResponseSent:
@@ -91,11 +87,13 @@ class ProtocolState {
       case ProtocolStateStatus.part2Sent:
           if (requestData.length == 1) {
             aliceFinish(requestData[0]);
+          } else {
+            print('\x1B[37mI\'m waiting for Bob...\x1B[0m');
           }
         break;
     }
     request(requestBody);
-    Future.delayed(const Duration(seconds: 6), startAlgorithm);
+    Future.delayed(const Duration(seconds: 2), startAlgorithm);
   }
 
   Future<void> request(String body) async {
@@ -117,7 +115,6 @@ class ProtocolState {
     if (!error) {
       if (response.statusCode == 200) {
         dynamic responseObj = jsonDecode(response.body);
-        print('\x1B[37m${responseObj["inbox"]}\x1B[0m');
         bool _hasData = false;
         String? _step;
         List? _value;
@@ -126,7 +123,7 @@ class ProtocolState {
           _value = (responseObj["inbox"][otherClientId]["values"]);
           _hasData = true;
         } catch (e) {
-          print("-");
+          // print("-");
         }
         if (_hasData) {
           requestData = _value!;
@@ -150,7 +147,7 @@ class ProtocolState {
         return;
       }
 
-      print('\x1B[37mHi, I\'m Alicia!\x1B[0m');
+      print('\x1B[37mHi, I\'m Alice!\x1B[0m');
 
       String body = jsonEncode(<String, dynamic>{
         'my_id': myClientId,
@@ -164,8 +161,7 @@ class ProtocolState {
           }
         }
       });
-      print('\x1B[33maliceSendStart\x1B[0m');
-      print("[] --> [${H.modPow(a1, N)}, ${H.modPow(a2, N)}]");
+      print('\x1B[33mAlice 1/3 [aliceSendStart]\x1B[0m');
       sendUpdate(body);
       state = ProtocolStateStatus.startSent;
     } catch (e) {
@@ -182,6 +178,7 @@ class ProtocolState {
         throw Exception("Invalid state");
       }
 
+      print('\x1B[33mBob 1/2 [bobReceiveStart]\x1B[0m');
       print("Bob official introduce");
 
       BigInt _hA1 = BigInt.parse(hA1);
@@ -199,9 +196,6 @@ class ProtocolState {
       sharedM = m;
       sharedL = l;
 
-      print("sharedM = $sharedM");
-      print("sharedL = $sharedL");
-
       String body = jsonEncode(<String, dynamic>{
         'my_id': myClientId,
         'send_messages': <String, dynamic>{
@@ -211,9 +205,6 @@ class ProtocolState {
           }
         }
       });
-
-      print('\x1B[33mbobReceiveStart\x1B[0m');
-      print("[$hA1, $hA2] --> [${H.modPow(a1, N)}, ${H.modPow(a2, N)}, $P, $Q]");
 
       sendUpdate(body);
       state = ProtocolStateStatus.startResponseSent;
@@ -242,9 +233,6 @@ class ProtocolState {
     sharedM = hB1_.modPow(a1, N);
     sharedL = hB2_.modPow(a2, N);
 
-    print("sharedM = $sharedM");
-    print("sharedL = $sharedL");
-
     P = sharedL.modPow(a3, N);
     Q = (H.modPow(a3, N) * sharedM.modPow(x, N)) % N;
 
@@ -267,8 +255,7 @@ class ProtocolState {
     sendUpdate(body);
     state = ProtocolStateStatus.part2Sent;
 
-    print('\x1B[33maliceReceiveStartResponse\x1B[0m');
-    print("[$hB1, $hB2, $bobP_, $bobQ_] --> [${P}, ${Q}, ${R}]");
+    print('\x1B[33mAlice 2/3 [aliceReceiveStartResponse]\x1B[0m');
   }
 
   void bobReceivePart2(aliceP_, aliceQ_, aliceR_) {
@@ -295,14 +282,11 @@ class ProtocolState {
 
     sendUpdate(body);
 
-    print('\x1B[33BobReceivePart2\x1B[0m');
-    print("[$aliceP_, $aliceQ_, $aliceR_] --> [${R}}]");
+    print('\x1B[33mBob 2/2 [BobReceivePart2]\x1B[0m');
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
-    bool res = _aliceR_.modPow(a2, N) == (P * otherPartyP.modInverse(N)) % N;
-    print('\x1B[33mres:$res\x1B[0m');
-    print(_aliceR_.modPow(a2, N));
-    print((P * otherPartyP.modInverse(N)) % N);
+    bool res = _aliceR_.modPow(a2, N) == (otherPartyP * P.modInverse(N)) % N;
+    print('\x1B[36mWYNIK: $res\x1B[0m');
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }
@@ -312,17 +296,12 @@ class ProtocolState {
       throw Exception("Invalid state");
     }
 
-    /// TODO:
     BigInt _bobR_ = BigInt.parse(bobR_);
 
     // Tutaj wynik, trzeba update na interfejs wtedy puścić
     bool res = _bobR_.modPow(a2, N) == (P * otherPartyP.modInverse(N)) % N;
-    print('\x1B[33maliceFinish\x1B[0m');
-    print("[] --> [$bobR_]");
-    print("WYNIK");
-    print(res);
-    print(_bobR_.modPow(a2, N));
-    print((P * otherPartyP.modInverse(N)) % N);
+    print('\x1B[33mAlice 3/3 [aliceFinish]\x1B[0m');
+    print('\x1B[36mWYNIK: $res\x1B[0m');
     resultToInterface(res);
     // Dodatkowo zresetować stan protokołu
   }

@@ -15,7 +15,7 @@ import 'logic/algorithm.dart';
 class MyHomePage extends StatefulWidget {
   const MyHomePage({Key? key, required this.title}) : super(key: key);
 
-  final int interval = 5;
+  final int interval = 2;
   final String title;
 
   @override
@@ -124,7 +124,6 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     if (!error) {
-      print(response.body);
       if (response.statusCode == 200) {
         dynamic responseObj = jsonDecode(response.body);
         setState(() {
@@ -189,10 +188,15 @@ class _MyHomePageState extends State<MyHomePage> {
                   Padding(
                       padding: EdgeInsets.only(top: 20.0),
                       child: Text(wait
-                          ? 'waiting...'
+                          ? '...'
                           : (algorithmResult == null
-                              ? (protocolState == null ? 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu' : 'wait (${protocolState!.state.name})' )
-                              : (algorithmResult == true ? 'jest' : (protocolState == null ? 'brak (nikogo nie ma)' : 'brak')))))
+                              ? (protocolState == null ? 'Proszę kliknąć przycisk w prawym dolnym rogu ekranu' : '(${protocolState!.state})')
+                              : (algorithmResult == true ? 'JEST BLISKO' : (protocolState == null ? 'brak (nikogo nie ma)' : 'JEST DALEKO'))),
+                          style: TextStyle(color: algorithmResult != null ? (algorithmResult == true ? Colors.green : Colors.red) : Colors.grey[800],
+                            fontWeight: algorithmResult != null ? FontWeight.w700 : FontWeight.normal,
+                            fontSize: algorithmResult != null ? 22.0 : 11.0,
+                          ),
+                      ))
                 ],
               ))
         ]),
